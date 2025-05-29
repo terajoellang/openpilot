@@ -31,6 +31,11 @@ class CarInterface(CarInterfaceBase):
 
     ret.steerLimitTimer = 1.0
     ret.steerActuatorDelay = 0.1
+
+    ret.vEgoStopping = 0.1
+    ret.vEgoStarting = 0.1
+    ret.stoppingDecelRate = 0.3
+
     return ret
 
   def _update(self, c, frogpilot_toggles):

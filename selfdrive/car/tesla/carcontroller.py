@@ -1,4 +1,4 @@
-from openpilot.common.numpy_fast import clip
+from openpilot.common.numpy_fast import clip, interp
 from opendbc.can.packer import CANPacker
 from openpilot.selfdrive.car import apply_std_steer_angle_limits
 from openpilot.selfdrive.car.interfaces import CarControllerBase
@@ -30,6 +30,9 @@ class CarController(CarControllerBase):
     self.last_hands_nanos = 0
     self.packer = CANPacker(dbc_name)
     self.tesla_can = TeslaCAN(self.packer)
+    self.active_frames = 0
+    self.prev_long_active = False
+    self.a_ego = 0
 
   def update(self, CC, CS, now_nanos, frogpilot_toggles):
     actuators = CC.actuators
@@ -82,13 +85,31 @@ class CarController(CarControllerBase):
 
     # Longitudinal control
     if self.CP.openpilotLongitudinalControl:
-      state = 4 if not pcm_cancel_cmd else 13  # 4=ACC_ON, 13=ACC_CANCEL_GENERIC_SILENT
-      accel = clip(actuators.accel, CarControllerParams.ACCEL_MIN, CarControllerParams.ACCEL_MAX)
-      cntr = CS.das_control["DAS_controlCounter"]
-      if frogpilot_toggles.hybrid_tacc and CC.longActive and (CC.hudControl.leadVisible or CS.out.gasPressed):
-        can_sends.append(self.tesla_can.hybrid_longitudinal(state, accel, CS.das_control, cntr, CS.out.vEgo, CS.out.gasPressed))
-      else:
-        can_sends.append(self.tesla_can.create_longitudinal_command(state, accel, cntr, CC.longActive))
+
+      if self.frame % 4 == 0:
+        # Stock Tesla ACC ramps down request after overriding to not violate accelMax, this period is even longer with FSD
+        accel = actuators.accel
+        if CC.longActive:
+          if not self.prev_long_active:
+            self.a_ego = CS.out.aEgo
+          accel = interp(self.active_frames, [0, 50], [self.a_ego, accel])
+          self.active_frames += 1
+        else:
+          self.active_frames = 0
+
+        self.prev_long_active = CC.longActive
+
+        state = 13 if pcm_cancel_cmd else 4  # 4=ACC_ON, 13=ACC_CANCEL_GENERIC_SILENT
+        accel = float(clip(accel, CarControllerParams.ACCEL_MIN, CarControllerParams.ACCEL_MAX))
+
+        # Maybe use this instead? cntr = (self.frame // 4) % 8
+        # Otherwise remove self.frame % 4 condition
+        cntr = CS.das_control["DAS_controlCounter"]
+
+        if frogpilot_toggles.hybrid_tacc and CC.longActive and (CC.hudControl.leadVisible or CS.out.gasPressed):
+          can_sends.append(self.tesla_can.hybrid_longitudinal(state, accel, CS.das_control, cntr, CS.out.vEgo, CS.out.gasPressed))
+        else:
+          can_sends.append(self.tesla_can.create_longitudinal_command(state, accel, cntr, CS.out.vEgo, CC.longActive))
 
     # Increment counter so cancel is prioritized even without openpilot longitudinal
     if pcm_cancel_cmd and not self.CP.openpilotLongitudinalControl:
