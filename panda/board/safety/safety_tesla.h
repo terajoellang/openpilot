@@ -37,6 +37,30 @@ RxCheck tesla_model3_y_rx_checks[] = {
 bool tesla_longitudinal = false;
 bool tesla_stock_aeb = false;
 
+static void tesla_rx_checks(bool stock_ecu_detected) {
+  gas_pressed_prev = gas_pressed;
+
+  // exit controls on rising edge of brake press
+  if (brake_pressed && (!brake_pressed_prev || vehicle_moving)) {
+    controls_allowed = false;
+  }
+  brake_pressed_prev = brake_pressed;
+
+  regen_braking_prev = regen_braking;
+
+  // check if stock ECU is on bus broken by car harness
+  if ((safety_mode_cnt > RELAY_TRNS_TIMEOUT) && stock_ecu_detected && !gm_skip_relay_check) {
+    relay_malfunction_set();
+  }
+}
+
+// Safety checks for longitudinal actuation
+static bool tesla_longitudinal_accel_checks(int desired_accel, const LongitudinalLimits limits) {
+  bool accel_valid = controls_allowed && !max_limit_check(desired_accel, limits.max_accel, limits.min_accel);
+  bool accel_inactive = desired_accel == limits.inactive_accel;
+  return !(accel_valid || accel_inactive);
+}
+
 static void tesla_rx_hook(const CANPacket_t *to_push) {
   int bus = GET_BUS(to_push);
   int addr = GET_ADDR(to_push);
@@ -88,24 +112,6 @@ static void tesla_rx_hook(const CANPacket_t *to_push) {
   tesla_rx_checks((addr == 0x488) && (bus == 0));
   tesla_rx_checks((addr == 0x2b9) && (bus == 0));
 }
-
-static void tesla_rx_checks(bool stock_ecu_detected) {
-  gas_pressed_prev = gas_pressed;
-
-  // exit controls on rising edge of brake press
-  if (brake_pressed && (!brake_pressed_prev || vehicle_moving)) {
-    controls_allowed = false;
-  }
-  brake_pressed_prev = brake_pressed;
-
-  regen_braking_prev = regen_braking;
-
-  // check if stock ECU is on bus broken by car harness
-  if ((safety_mode_cnt > RELAY_TRNS_TIMEOUT) && stock_ecu_detected && !gm_skip_relay_check) {
-    relay_malfunction_set();
-  }
-}
-
 
 static bool tesla_tx_hook(const CANPacket_t *to_send) {
   bool tx = true;
@@ -164,17 +170,6 @@ static bool tesla_tx_hook(const CANPacket_t *to_send) {
   }
 
   return tx;
-}
-
-static bool tesla_get_longitudinal_allowed(void) {
-  return controls_allowed;
-}
-
-// Safety checks for longitudinal actuation
-static bool tesla_longitudinal_accel_checks(int desired_accel, const LongitudinalLimits limits) {
-  bool accel_valid = tesla_get_longitudinal_allowed() && !max_limit_check(desired_accel, limits.max_accel, limits.min_accel);
-  bool accel_inactive = desired_accel == limits.inactive_accel;
-  return !(accel_valid || accel_inactive);
 }
 
 static int tesla_fwd_hook(int bus_num, int addr) {
