@@ -31,7 +31,7 @@ class CarController(CarControllerBase):
     self.packer = CANPacker(dbc_name)
     self.tesla_can = TeslaCAN(self.packer)
     self.active_frames = 0
-    self.prev_long_active = False
+    self.prev_gas_pressed = False
     self.a_ego = 0
 
   def update(self, CC, CS, now_nanos, frogpilot_toggles):
@@ -89,23 +89,20 @@ class CarController(CarControllerBase):
       if self.frame % 4 == 0:
         # Stock Tesla ACC ramps down request after overriding to not violate accelMax, this period is even longer with FSD
         accel = actuators.accel
-        if CC.longActive:
-          if not self.prev_long_active:
+        if not CS.out.gasPressed:
+          if not self.prev_gas_pressed:
             self.a_ego = CS.out.aEgo
           accel = interp(self.active_frames, [0, 50], [self.a_ego, accel])
           self.active_frames += 1
         else:
           self.active_frames = 0
 
-        self.prev_long_active = CC.longActive
+        self.prev_gas_pressed = CS.out.gasPressed
 
         state = 13 if pcm_cancel_cmd else 4  # 4=ACC_ON, 13=ACC_CANCEL_GENERIC_SILENT
         accel = float(clip(accel, CarControllerParams.ACCEL_MIN, CarControllerParams.ACCEL_MAX))
 
-        # If there are errors, remove self.frame % 4 condition
         cntr = (self.frame // 4) % 8
-        # This was previously used in this place:
-        # cntr = CS.das_control["DAS_controlCounter"]
 
         if frogpilot_toggles.hybrid_tacc and CC.longActive and (CC.hudControl.leadVisible or CS.out.gasPressed):
           can_sends.append(self.tesla_can.hybrid_longitudinal(state, accel, CS.das_control, cntr, CS.out.vEgo, CS.out.gasPressed))

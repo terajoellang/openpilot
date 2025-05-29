@@ -35,6 +35,7 @@ class TeslaCAN:
 
   def create_longitudinal_command(self, acc_state, accel, cntr, v_ego, active):
     set_speed = 0 if accel < 0 else V_CRUISE_MAX
+    # TODOJ: We may be able to remove this
     if not active:
       set_speed = abs(v_ego * CV.MS_TO_KPH)
 
