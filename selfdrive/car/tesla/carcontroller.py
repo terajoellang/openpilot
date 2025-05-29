@@ -90,7 +90,7 @@ class CarController(CarControllerBase):
         # Stock Tesla ACC ramps down request after overriding to not violate accelMax, this period is even longer with FSD
         accel = actuators.accel
         if not CS.out.gasPressed:
-          if not self.prev_gas_pressed:
+          if self.prev_gas_pressed:
             self.a_ego = CS.out.aEgo
           accel = interp(self.active_frames, [0, 50], [self.a_ego, accel])
           self.active_frames += 1
