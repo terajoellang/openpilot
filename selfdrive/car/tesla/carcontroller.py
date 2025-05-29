@@ -102,9 +102,10 @@ class CarController(CarControllerBase):
         state = 13 if pcm_cancel_cmd else 4  # 4=ACC_ON, 13=ACC_CANCEL_GENERIC_SILENT
         accel = float(clip(accel, CarControllerParams.ACCEL_MIN, CarControllerParams.ACCEL_MAX))
 
-        # Maybe use this instead? cntr = (self.frame // 4) % 8
-        # Otherwise remove self.frame % 4 condition
-        cntr = CS.das_control["DAS_controlCounter"]
+        # If there are errors, remove self.frame % 4 condition
+        cntr = (self.frame // 4) % 8
+        # This was previously used in this place:
+        # cntr = CS.das_control["DAS_controlCounter"]
 
         if frogpilot_toggles.hybrid_tacc and CC.longActive and (CC.hudControl.leadVisible or CS.out.gasPressed):
           can_sends.append(self.tesla_can.hybrid_longitudinal(state, accel, CS.das_control, cntr, CS.out.vEgo, CS.out.gasPressed))
