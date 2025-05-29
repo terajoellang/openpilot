@@ -69,8 +69,8 @@ class CarState(CarStateBase):
     ret.doorOpen = (cp.vl["UI_warning"]["anyDoorOpen"] == 1)
 
     # Blinkers
-    ret.leftBlinker = cp.vl["UI_warning"]["leftBlinkerBlinking"] in (1, 2)
-    ret.rightBlinker = cp.vl["UI_warning"]["rightBlinkerBlinking"] in (1, 2)
+    ret.leftBlinker = cp.vl["UI_warning"]["leftBlinkerOn"] != 0
+    ret.rightBlinker = cp.vl["UI_warning"]["rightBlinkerOn"] != 0
 
     # Seatbelt
     ret.seatbeltUnlatched = cp.vl["UI_warning"]["buckleStatus"] != 1
